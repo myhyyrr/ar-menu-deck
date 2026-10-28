@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16120f">
+<title>See it on your table</title>
+<style>
+  :root { --bg:#16120f; --fg:#f4ece1; --accent:#e8a33d; --muted:#c3b7a8; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #intro { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; padding:24px 16px; text-align:center; }
+  #intro img { width:min(68vw, 300px); height:auto; }
+  h1 { margin:0; font-size:1.5rem; font-weight:600; }
+  #intro p { margin:0; color:var(--muted); max-width:34ch; }
+  .steps { list-style:none; margin:0; padding:0; color:var(--muted); max-width:34ch; text-align:left; }
+  .steps li { padding:4px 0 4px 28px; position:relative; }
+  .steps li::before { content:attr(data-n); position:absolute; left:0; top:4px; width:20px; height:20px; border-radius:50%;
+    background:rgba(232,163,61,.2); color:var(--accent); font-size:.75rem; display:grid; place-items:center; }
+  .btn { appearance:none; border:0; border-radius:999px; background:var(--accent); color:#1a1208; font:600 1rem/1 inherit;
+    padding:14px 26px; min-height:48px; min-width:140px; cursor:pointer; }
+  .btn[disabled] { opacity:.5; cursor:wait; }
+  .btn.ghost { background:rgba(22,18,15,.72); color:var(--fg); border:1px solid rgba(244,236,225,.3); }
+  .btn:focus-visible { outline:3px solid var(--fg); outline-offset:3px; }
+  #status { min-height:1.4em; font-size:.9rem; color:var(--muted); }
+  #overlay { position:fixed; inset:0; pointer-events:none; display:none; }
+  #overlay.on { display:block; }
+  #hint { position:absolute; left:50%; top:max(16px, env(safe-area-inset-top)); transform:translateX(-50%);
+    background:rgba(22,18,15,.8); padding:10px 16px; border-radius:999px; font-size:.95rem;
+    max-width:calc(100% - 32px); text-align:center; transition:background .2s; }
+  #hint.ok { background:rgba(28,96,58,.9); }
+  #hint.warn { background:rgba(128,72,10,.9); }
+  #hint.nudge { animation:nudge .35s; }
+  @keyframes nudge { 25%{transform:translateX(calc(-50% - 6px))} 75%{transform:translateX(calc(-50% + 6px))} }
+  #size { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(max(20px, env(safe-area-inset-bottom)) + 64px);
+    background:rgba(22,18,15,.7); padding:6px 12px; border-radius:999px; font-size:.85rem; display:none; }
+  #bar { position:absolute; left:0; right:0; bottom:max(20px, env(safe-area-inset-bottom));
+    display:flex; justify-content:center; gap:12px; }
+  #bar .btn { pointer-events:auto; }
+  @media (prefers-reduced-motion: reduce) { #hint.nudge { animation:none; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<main id="intro">
+  <img src="assets/dish-cutout.webp" alt="Example dish: dumpling noodle soup in a speckled bowl">
+  <h1>See it on your table</h1>
+  <ol class="steps">
+    <li data-n="1">Sit at your table.</li>
+    <li data-n="2">Point your camera at the table top and move it slowly.</li>
+    <li data-n="3">Tap when the ring turns green to place the dish. Its size is fixed.</li>
+  </ol>
+  <button id="start" class="btn" type="button" disabled>Loading…</button>
+  <p id="status" role="status" aria-live="polite"></p>
+  <p><a id="back" href="index.html#demo" style="color:var(--muted)">Back to the deck</a></p>
+</main>
+
+<div id="overlay" aria-live="polite">
+  <div id="hint">Move your phone slowly over the table</div>
+  <div id="size"></div>
+  <div id="bar">
+    <button id="exit" class="btn ghost" type="button">Done</button>
+  </div>
+</div>
+
+<script type="module">
+/* ============================================================
+   OPTIONAL tap-to-place AR page (Android Chrome with WebXR).
+   The deck only sends phones here when CONFIG.ar.android is set to
+   'webxr-tap-to-place' in index.html. Default is Google Scene Viewer.
+   - Loads three.js r169 from cdn.jsdelivr.net (the one extra external
+     dependency in this project; only on this page).
+   - "Table" below is a height heuristic on detected horizontal planes,
+     NOT semantic table recognition: it can still accept a low bench or
+     reject an unusually high/low table. Test on real phones before use.
+   - Scale is never changed anywhere in this file.
+   ============================================================ */
+const CONFIG = {
+  glb:  'assets/dish.glb',            // Android / WebXR model (metres, Y-up, base at y = 0)
+  sceneViewerGlb: 'assets/dish-sv.glb', // un-quantised copy for the Scene Viewer fallback
+  usdz: 'assets/dish.usdz',           // iPhone Quick Look model
+  title: 'Dumpling noodle soup',
+  sizeLabel: 'Example dish · bowl about 22 cm (estimated)',
+  // Heuristic thresholds for a level surface at a plausible table height:
+  table: {
+    maxTiltDeg: 14,        // surface must be level (a table top, not a wall or slope)
+    minDrop: 0.12,         // table must be at least 12 cm below the phone...
+    maxDrop: 1.00,         // ...and no more than 1 m below it (the floor is usually 1.1 m+ below)
+    minAboveFloor: 0.45,   // once the floor has been seen, the surface must be 45 cm+ above it
+    maxAboveFloor: 1.15,   // and not above bench/bar height
+    stableFrames: 8        // frames in a row the surface must pass before the ring turns green
+  }
+};
+
+/* ---------- Surface classification (pure, testable) ---------- */
+function classifySurface({ upY, camY, hitY, floorY }, t = CONFIG.table) {
+  if (upY < Math.cos(t.maxTiltDeg * Math.PI / 180)) return 'notflat';
+  const drop = camY - hitY;
+  if (drop > t.maxDrop) return 'floor';
+  if (drop < t.minDrop) return 'toohigh';
+  if (Number.isFinite(floorY)) {
+    const above = hitY - floorY;
+    if (above < t.minAboveFloor) return 'floor';
+    if (above > t.maxAboveFloor) return 'toohigh';
+  }
+  return 'table';
+}
+window.classifySurface = classifySurface; // exposed for testing
+
+const HINTS = {
+  searching: ['Move your phone slowly over the table', ''],
+  notflat:   ['Aim at a flat, level surface', 'warn'],
+  floor:     ['This looks too low for a table. Aim at the table top', 'warn'],
+  toohigh:   ['Aim a little lower, at the table top', 'warn'],
+  steady:    ['Hold steady…', ''],
+  table:     ['Tap to place the dish', 'ok'],
+  placed:    ['Tap another spot to move it', 'ok']
+};
+
+const $ = id => document.getElementById(id);
+const startBtn = $('start'), statusEl = $('status');
+const venueParam = new URLSearchParams(location.search).get('venue');
+if (venueParam) $('back').href = 'index.html?venue=' + encodeURIComponent(venueParam.slice(0, 40)) + '#demo';
+const ua = navigator.userAgent;
+const isAndroid = /Android/i.test(ua);
+const canQuickLook = (() => { const a = document.createElement('a'); return !!(a.relList && a.relList.supports && a.relList.supports('ar')); })();
+
+let mode = 'none';
+(async () => {
+  let xr = false;
+  if (navigator.xr && navigator.xr.isSessionSupported) {
+    try { xr = await navigator.xr.isSessionSupported('immersive-ar'); } catch { xr = false; }
+  }
+  mode = xr ? 'webxr' : canQuickLook ? 'quicklook' : isAndroid ? 'sceneviewer' : 'none';
+  document.documentElement.dataset.arMode = mode;
+
+  if (mode === 'none') {
+    startBtn.hidden = true;
+    statusEl.textContent = 'Open this page on your phone to see the dish on your table.';
+    return;
+  }
+  if (mode === 'webxr') {
+    try { await preloadXR(); }
+    catch (e) { console.warn(e); mode = isAndroid ? 'sceneviewer' : 'none'; }
+  }
+  startBtn.disabled = false;
+  startBtn.textContent = 'Start';
+})();
+
+startBtn.addEventListener('click', () => {
+  if (mode === 'webxr') return startXR();
+  if (mode === 'quicklook') return openQuickLook();
+  if (mode === 'sceneviewer') return openSceneViewer();
+});
+
+/* ---------- iPhone: AR Quick Look, scale locked ---------- */
+function openQuickLook() {
+  const a = document.createElement('a');
+  a.setAttribute('rel', 'ar');
+  a.href = new URL(CONFIG.usdz, location.href).href + '#allowsContentScaling=0';
+  a.appendChild(document.createElement('img')); // Safari needs an <img> child to open Quick Look
+  a.click();
+}
+
+/* ---------- Android without WebXR: Scene Viewer, scale locked, horizontal only ---------- */
+function openSceneViewer() {
+  const file = new URL(CONFIG.sceneViewerGlb || CONFIG.glb, location.href).href;
+  const params = new URLSearchParams({ file, mode: 'ar_only', resizable: 'false', title: CONFIG.title });
+  location.href = `intent://arvr.google.com/scene-viewer/1.0?${params}` +
+    `#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;` +
+    `S.browser_fallback_url=${encodeURIComponent(location.href)};end;`;
+}
+
+/* ---------- Android Chrome: custom WebXR, table-only placement ---------- */
+let THREE, renderer, scene, camera, dish, reticle, footprint;
+
+async function preloadXR() {
+  statusEl.textContent = 'Preparing the dish…';
+  THREE = await import('three');
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType('local');
+  renderer.domElement.style.display = 'none';
+  document.body.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 30);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 0.5));
+
+  const gltf = await new GLTFLoader().loadAsync(CONFIG.glb);
+  dish = new THREE.Group();
+  dish.add(gltf.scene);
+  const size = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+  footprint = Math.max(size.x, size.z) / 2;
+
+  // Soft contact shadow so the bowl sits on the table instead of floating
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(0,0,0,0.55)'); grd.addColorStop(0.55, 'rgba(0,0,0,0.25)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(footprint * 2.5, footprint * 2.5),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.0015; shadow.renderOrder = -1;
+  dish.add(shadow);
+  dish.visible = false;
+  scene.add(dish);
+
+  // Placement ring, exactly the size of the bowl, so diners see how much table it takes
+  reticle = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false });
+  reticle.add(new THREE.Mesh(new THREE.RingGeometry(footprint * 0.95, footprint, 64).rotateX(-Math.PI / 2), ringMat));
+  reticle.add(new THREE.Mesh(new THREE.CircleGeometry(footprint * 0.05, 24).rotateX(-Math.PI / 2), ringMat));
+  reticle.userData.mat = ringMat;
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
+  statusEl.textContent = '';
+}
+
+async function startXR() {
+  const overlay = $('overlay');
+  let session;
+  try {
+    session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: overlay }
+    });
+  } catch (e) {
+    console.warn(e);
+    statusEl.textContent = 'AR could not start on this phone. Trying the standard viewer…';
+    return isAndroid ? openSceneViewer() : undefined;
+  }
+
+  renderer.domElement.style.display = 'block';
+  overlay.classList.add('on');
+  $('intro').hidden = true;
+  await renderer.xr.setSession(session);
+  const local = renderer.xr.getReferenceSpace();
+  const viewerSpace = await session.requestReferenceSpace('viewer');
+  const hitSource = await session.requestHitTestSource({ space: viewerSpace });
+
+  const m = new THREE.Matrix4(), pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+  const up = new THREE.Vector3(), lastPos = new THREE.Vector3();
+  let floorY = Infinity, floorSeen = 0, stable = 0, state = 'searching', placed = false, current = 'searching';
+
+  const hintEl = $('hint'), sizeEl = $('size');
+  function setHint(key) {
+    if (key === current) return;
+    current = key;
+    const [text, cls] = HINTS[key];
+    hintEl.textContent = text; hintEl.className = cls;
+  }
+
+  session.addEventListener('select', () => {
+    if (state === 'table' && stable >= CONFIG.table.stableFrames) {
+      // Place (or move) the dish at true scale. Scale is never changed anywhere in this file.
+      dish.position.copy(pos);
+      const cam = renderer.xr.getCamera();
+      dish.rotation.set(0, Math.atan2(cam.position.x - pos.x, cam.position.z - pos.z), 0);
+      dish.visible = true; placed = true;
+      sizeEl.textContent = CONFIG.sizeLabel; sizeEl.style.display = 'block';
+      if (navigator.vibrate) navigator.vibrate(15);
+    } else {
+      hintEl.classList.remove('nudge'); void hintEl.offsetWidth; hintEl.classList.add('nudge');
+    }
+  });
+
+  $('exit').onclick = () => session.end();
+  session.addEventListener('end', () => {
+    hitSource.cancel();
+    renderer.setAnimationLoop(null);
+    renderer.domElement.style.display = 'none';
+    overlay.classList.remove('on');
+    $('intro').hidden = false;
+    dish.visible = false; reticle.visible = false;
+  });
+
+  renderer.setAnimationLoop((t, frame) => {
+    if (!frame) return;
+    const viewer = frame.getViewerPose(local);
+    const hits = frame.getHitTestResults(hitSource);
+    if (!viewer || !hits.length) {
+      reticle.visible = false; stable = 0; state = 'searching';
+      setHint(placed ? 'placed' : 'searching');
+      renderer.render(scene, camera); return;
+    }
+    const pose = hits[0].getPose(local);
+    m.fromArray(pose.transform.matrix);
+    m.decompose(pos, quat, scl);
+    up.set(0, 1, 0).applyQuaternion(quat);                     // hit pose Y axis = surface normal
+    const camY = viewer.transform.position.y;
+
+    // Learn where the floor is: level surfaces well below the phone
+    if (up.y > 0.97 && camY - pos.y > 1.05) {
+      floorSeen++;
+      if (floorSeen > 10) floorY = Math.min(floorY, pos.y);
+    }
+
+    state = classifySurface({ upY: up.y, camY, hitY: pos.y, floorY });
+    if (state === 'table') {
+      stable = pos.distanceTo(lastPos) < 0.03 ? stable + 1 : 1;
+    } else stable = 0;
+    lastPos.copy(pos);
+
+    const ready = state === 'table' && stable >= CONFIG.table.stableFrames;
+    reticle.visible = state === 'table';
+    reticle.matrix.makeRotationFromQuaternion(new THREE.Quaternion()).setPosition(pos); // keep ring level
+    reticle.userData.mat.color.set(ready ? 0x5fcf8a : 0xffffff);
+
+    if (placed) setHint(ready ? 'placed' : (state === 'table' ? 'steady' : 'placed'));
+    else setHint(ready ? 'table' : state === 'table' ? 'steady' : state);
+
+    renderer.render(scene, camera);
+  });
+}
+</script>
+</body>
+</html>
