@@ -74,8 +74,9 @@
 <script type="module">
 /* ============================================================
    OPTIONAL tap-to-place AR page (Android Chrome with WebXR).
-   The deck only sends phones here when CONFIG.ar.android is set to
-   'webxr-tap-to-place' in index.html. Default is Google Scene Viewer.
+   The deck and menu.html send Android phones here (with ?alt=1) as a
+   second way in after Scene Viewer closes or crashes, or straight away
+   when CONFIG.ar.android is 'webxr-tap-to-place' in index.html.
    - Loads three.js r169 from cdn.jsdelivr.net (the one extra external
      dependency in this project; only on this page).
    - "Table" below is a height heuristic on detected horizontal planes,
@@ -128,7 +129,10 @@ const HINTS = {
 const $ = id => document.getElementById(id);
 const startBtn = $('start'), statusEl = $('status');
 const venueParam = new URLSearchParams(location.search).get('venue');
-if (venueParam) $('back').href = 'index.html?venue=' + encodeURIComponent(venueParam.slice(0, 40)) + '#demo';
+const venueQuery = venueParam ? '?venue=' + encodeURIComponent(venueParam.slice(0, 40)) : '';
+if (new URLSearchParams(location.search).get('from') === 'menu') {
+  $('back').href = 'menu.html' + venueQuery; $('back').textContent = 'Back to the menu';
+} else if (venueParam) $('back').href = 'index.html' + venueQuery + '#demo';
 const ua = navigator.userAgent;
 const isAndroid = /Android/i.test(ua);
 const canQuickLook = (() => { const a = document.createElement('a'); return !!(a.relList && a.relList.supports && a.relList.supports('ar')); })();
@@ -139,17 +143,22 @@ let mode = 'none';
   if (navigator.xr && navigator.xr.isSessionSupported) {
     try { xr = await navigator.xr.isSessionSupported('immersive-ar'); } catch { xr = false; }
   }
-  mode = xr ? 'webxr' : canQuickLook ? 'quicklook' : isAndroid ? 'sceneviewer' : 'none';
+  // ?alt=1 means the deck sent us here because Scene Viewer closed or crashed: never send them back to it.
+  const fromFallback = new URLSearchParams(location.search).get('alt') === '1';
+  const androidNative = isAndroid && !fromFallback ? 'sceneviewer' : 'none';
+  mode = xr ? 'webxr' : canQuickLook ? 'quicklook' : androidNative;
   document.documentElement.dataset.arMode = mode;
 
-  if (mode === 'none') {
+  const noAR = () => {
     startBtn.hidden = true;
-    statusEl.textContent = 'Open this page on your phone to see the dish on your table.';
-    return;
-  }
+    statusEl.textContent = fromFallback
+      ? 'In-browser AR isn’t available in this browser. Update Chrome and Google Play Services for AR, or rotate the dish in 3D on the previous page.'
+      : 'Open this page on your phone to see the dish on your table.';
+  };
+  if (mode === 'none') { noAR(); return; }
   if (mode === 'webxr') {
     try { await preloadXR(); }
-    catch (e) { console.warn(e); mode = isAndroid ? 'sceneviewer' : 'none'; }
+    catch (e) { console.warn(e); mode = androidNative; if (mode === 'none') { noAR(); return; } }
   }
   startBtn.disabled = false;
   startBtn.textContent = 'Start';
@@ -173,9 +182,10 @@ function openQuickLook() {
 /* ---------- Android without WebXR: Scene Viewer, scale locked, horizontal only ---------- */
 function openSceneViewer() {
   const file = new URL(CONFIG.sceneViewerGlb || CONFIG.glb, location.href).href;
-  const params = new URLSearchParams({ file, mode: 'ar_only', resizable: 'false', title: CONFIG.title });
+  // Google app package + ar_preferred, as recommended by Google for browsers (falls back to 3D, not an error).
+  const params = new URLSearchParams({ file, mode: 'ar_preferred', resizable: 'false', title: CONFIG.title });
   location.href = `intent://arvr.google.com/scene-viewer/1.0?${params}` +
-    `#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;` +
+    `#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;` +
     `S.browser_fallback_url=${encodeURIComponent(location.href)};end;`;
 }
 
@@ -245,8 +255,12 @@ async function startXR() {
     });
   } catch (e) {
     console.warn(e);
-    statusEl.textContent = 'AR could not start on this phone. Trying the standard viewer…';
-    return isAndroid ? openSceneViewer() : undefined;
+    if (isAndroid && new URLSearchParams(location.search).get('alt') !== '1') {
+      statusEl.textContent = 'AR could not start on this phone. Trying the standard viewer…';
+      return openSceneViewer();
+    }
+    statusEl.textContent = 'AR could not start in this browser. Check Chrome has camera permission, then try again.';
+    return;
   }
 
   renderer.domElement.style.display = 'block';

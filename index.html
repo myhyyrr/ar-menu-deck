@@ -399,6 +399,7 @@ p { margin: 0; text-wrap: pretty; }
 .ar-guide li::before { content: counter(g); flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font: 700 .8rem/1 var(--font-sans); background: rgba(232, 163, 61, .18); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-ink); transform: translateY(5px); }
 .notice { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg-raised); font-size: .92rem; color: var(--ink-muted); }
 .notice strong { color: var(--ink); }
+.notice .btn { display: inline-flex; margin: 8px 0 6px; min-height: 44px; padding: 8px 16px; font-size: .92rem; }
 .qr-card { display: flex; gap: 18px; align-items: center; padding: 16px; border-radius: var(--radius); background: var(--bg-raised); border: 1px solid var(--line); }
 .qr-card__code { width: 164px; flex: none; background: #fff; border-radius: 12px; padding: 6px; }
 .qr-card__code svg { width: 100%; height: auto; display: block; }
@@ -712,6 +713,7 @@ input[type="range"] { width: 100%; min-height: 32px; accent-color: var(--accent)
           </ol>
           <p class="notice" id="arNotice" role="status"><strong>Good to know:</strong> phones detect flat surfaces, not tables as such, so aim at the table. AR availability varies by phone and browser.</p>
         </div>
+        <p class="small"><a href="menu.html" id="menuLink">See it inside an example menu →</a> <span class="muted">(what diners see after scanning the table QR)</span></p>
 
         <div class="only-desktop stack">
           <p class="muted">Drag to rotate. Scroll or pinch to zoom. To place it on a real table, open this slide on a phone.</p>
@@ -763,8 +765,8 @@ input[type="range"] { width: 100%; min-height: 32px; accent-color: var(--accent)
       </div>
       <div class="grid benefits">
         <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.3 6.8 19l1-5.8L3.6 9.1l5.8-.8z"/></svg></span><h3>Showcase high-value dishes</h3><p>Desserts, sides and premium dishes, shown as they really look. Higher spend per head is something the pilot tests, not a promise.</p></article>
-        <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span><h3>Make unfamiliar dishes easier to understand</h3><p>Guests can see what will arrive before they commit to something new.</p></article>
-        <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l14-14 4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></span><h3>Give guests a clearer visual reference</h3><p>Portion, plating and plate size, viewed on their own table.</p></article>
+        <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span><h3>Fewer “how big is it?” questions</h3><p>Guests see the portion, plating and ingredients on their own table before they ask, so staff repeat themselves less. The pilot counts these questions.</p></article>
+        <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l14-14 4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></span><h3>A moment guests remember</h3><p>Something to show the table and talk about afterwards, even on nights it doesn’t change what they order.</p></article>
         <article class="card benefit"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><h3>Create extra photo and video content</h3><p>The same capture session can produce menu photos and short clips for your socials.</p></article>
       </div>
     </div>
@@ -932,7 +934,7 @@ const CONFIG = {
     name: 'Dumpling noodle soup',
     label: 'Example dish',
     glb: 'assets/dish.glb',               // in-page 3D viewer (quantised, 2.6 MB)
-    sceneViewerGlb: 'assets/dish-sv.glb', // Android Scene Viewer copy without KHR_mesh_quantization (see README)
+    sceneViewerGlb: 'assets/dish-sv.glb', // Android Scene Viewer copy: no KHR_mesh_quantization, 50k triangles (see README)
     usdz: 'assets/dish.usdz',             // iPhone AR Quick Look
     poster: 'assets/dish-poster.webp',
     cutout: 'assets/dish-cutout.webp',
@@ -947,8 +949,15 @@ const CONFIG = {
     // 'scene-viewer'       → Android opens Google Scene Viewer (native, auto-placement, scale locked). Default.
     // 'webxr-tap-to-place' → Android Chrome with WebXR opens ar.html (reticle + tap to place). Test on a real phone first.
     android: 'scene-viewer',
-    tapToPlacePage: 'ar.html'
+    tapToPlacePage: 'ar.html',
+    // When someone comes back from Scene Viewer (it closed, crashed or they finished), the demo slide
+    // offers ar.html as a second way in, if Chrome on that phone supports WebXR AR.
+    offerInBrowserFallback: true
   },
+
+  // 3D viewer spin. The dish turns slowly on the cover and the demo slide, pauses while someone
+  // drags it, and starts again after resumeAfterMs. Off automatically for "reduce motion" users.
+  spin: { cover: true, demo: true, speed: '18deg', resumeAfterMs: 2500 },
 
   // Pinned <model-viewer> build. If you change the version, update or delete `integrity`.
   modelViewer: {
@@ -1516,11 +1525,44 @@ const CONFIG = {
     ? '<strong>Open this page in Safari to use AR.</strong> Some in-app browsers cannot open the iPhone AR viewer.'
     : '<strong>Open this page in Chrome to use AR.</strong> This browser cannot open the Android AR viewer.';
   let webxrAR = false;
-  if (IS_ANDROID && CONFIG.ar.android === 'webxr-tap-to-place' && navigator.xr && navigator.xr.isSessionSupported) {
-    navigator.xr.isSessionSupported('immersive-ar').then(ok => { webxrAR = !!ok; }).catch(() => { webxrAR = false; });
-  }
+  const webxrReady = (IS_ANDROID && navigator.xr && navigator.xr.isSessionSupported)
+    ? navigator.xr.isSessionSupported('immersive-ar').then(ok => (webxrAR = !!ok)).catch(() => (webxrAR = false))
+    : Promise.resolve(false);
 
   function arNotice(html) { const n = $('#arNotice'); if (n) n.innerHTML = html; }
+
+  function tapToPlaceUrl() {
+    const u = new URL(CONFIG.ar.tapToPlacePage, location.href);
+    if (venue) u.searchParams.set('venue', venue);
+    u.searchParams.set('alt', '1');                        // ar.html then never bounces back to Scene Viewer
+    return u.href;
+  }
+
+  // Scene Viewer runs inside the Google app. If it crashes ("Google keeps stopping") or closes,
+  // Chrome simply shows this page again, so remember the launch and offer a second way in.
+  const AR_LAUNCH_KEY = 'deck-ar-launch';
+  function rememberArLaunch() { try { sessionStorage.setItem(AR_LAUNCH_KEY, String(Date.now())); } catch (e) {} }
+  function recentArLaunch() {
+    try {
+      const t = Number(sessionStorage.getItem(AR_LAUNCH_KEY));
+      if (t && Date.now() - t < 10 * 60 * 1000) { sessionStorage.removeItem(AR_LAUNCH_KEY); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function offerArFallback() {
+    if (!IS_ANDROID || !CONFIG.ar.offerInBrowserFallback) return;
+    webxrReady.then(() => {
+      const tips = 'If it closed with “Google keeps stopping”, update the <strong>Google</strong> app and <strong>Google Play Services for AR</strong> from the Play Store, then try again.';
+      if (webxrAR) {
+        arNotice(`<strong>Did the AR viewer close or not open?</strong> Try the in-browser version instead, which runs inside Chrome. <a class="btn btn--ghost" href="${tapToPlaceUrl()}">Open in-browser AR</a><br><span class="small">${tips}</span>`);
+      } else {
+        arNotice(`<strong>Did the AR viewer close or not open?</strong> ${tips} You can still rotate the dish in 3D above.`);
+      }
+      const n = $('#arNotice');
+      // Wait for the slide change to settle (it resets the slide's scroll), then bring the message into view.
+      if (n && n.scrollIntoView) setTimeout(() => n.scrollIntoView({ block: 'center', behavior: 'auto' }), 700);
+    });
+  }
 
   function openQuickLook() {
     const a = document.createElement('a');
@@ -1538,8 +1580,12 @@ const CONFIG = {
     const fallback = new URL(location.href);
     fallback.searchParams.set('ar', 'unavailable');
     fallback.hash = 'demo';
-    const q = new URLSearchParams({ file, mode: 'ar_only', resizable: 'false', title: CONFIG.dish.name });
-    location.href = `intent://arvr.google.com/scene-viewer/1.0?${q.toString()}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(fallback.href)};end;`;
+    // Google's recommended browser intent: the Google app package with ar_preferred. Phones without
+    // AR support get Scene Viewer's 3D view instead of an error; a missing or outdated Google app
+    // goes to the fallback URL. resizable=false locks the scale in AR.
+    const q = new URLSearchParams({ file, mode: 'ar_preferred', resizable: 'false', title: CONFIG.dish.name });
+    rememberArLaunch();
+    location.href = `intent://arvr.google.com/scene-viewer/1.0?${q.toString()}#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(fallback.href)};end;`;
   }
 
   function launchAR() {
@@ -1555,9 +1601,7 @@ const CONFIG = {
     }
     if (AR_MODE === 'android') {
       if (CONFIG.ar.android === 'webxr-tap-to-place' && webxrAR) {
-        const u = new URL(CONFIG.ar.tapToPlacePage, location.href);
-        if (venue) u.searchParams.set('venue', venue);
-        location.href = u.href;
+        location.href = tapToPlaceUrl();
         return;
       }
       openSceneViewer();
@@ -1571,6 +1615,7 @@ const CONFIG = {
     const arCapable = AR_MODE !== 'none';
     wrap.classList.add(arCapable ? 'mode-ar' : 'mode-desktop');
     $('#arButton').addEventListener('click', launchAR);
+    if (venue) $('#menuLink').href = 'menu.html?venue=' + encodeURIComponent(venue);
     if (params.get('ar') === 'unavailable') {
       arNotice('<strong>AR isn’t available on this phone or browser.</strong> You can still rotate the dish in 3D above.');
       params.delete('ar');
@@ -1578,6 +1623,12 @@ const CONFIG = {
       safeHistory('replaceState', history.state, clean.href);
     }
     if (AR_MODE === 'mobile-unsupported') arNotice(UNSUPPORTED_MSG);
+    if (AR_MODE === 'android') {
+      if (recentArLaunch()) offerArFallback();             // page was reloaded after Scene Viewer
+      const back = () => { if (document.visibilityState === 'visible' && recentArLaunch()) offerArFallback(); };
+      document.addEventListener('visibilitychange', back);
+      window.addEventListener('pageshow', back);
+    }
     $('#demoCaption').textContent = CONFIG.dish.calibrated
       ? `${CONFIG.dish.label}: ${CONFIG.dish.name.toLowerCase()}. Shot in a real kitchen and scaled to the real plate size.`
       : `${CONFIG.dish.label}: ${CONFIG.dish.name.toLowerCase()}. Demo model — real-world scale not yet confirmed (${CONFIG.dish.sizeNote}). Your own dishes would be captured in your venue and checked against the real plate.`;
@@ -1629,7 +1680,7 @@ const CONFIG = {
       src: CONFIG.dish.glb, alt: CONFIG.dish.alt, poster: CONFIG.dish.poster, loading: 'eager', reveal: 'auto',
       'camera-orbit': '210deg 52deg auto', 'min-camera-orbit': 'auto 0deg auto', 'max-camera-orbit': 'auto 62deg auto',
       'shadow-intensity': '1', 'environment-image': 'neutral', 'interaction-prompt': 'none', 'touch-action': 'pan-y',
-      'rotation-per-second': '14deg', 'auto-rotate-delay': '0',
+      'rotation-per-second': CONFIG.spin.speed, 'auto-rotate-delay': String(CONFIG.spin.resumeAfterMs),
       // AR (iPhone only through model-viewer): supplied USDZ, scale locked. Android is routed in launchAR().
       ar: '', 'ar-modes': 'quick-look', 'ar-scale': 'fixed', 'ar-placement': 'floor', 'ios-src': CONFIG.dish.usdz
     };
@@ -1711,7 +1762,7 @@ const CONFIG = {
     if (viewerEl.parentElement !== stage) stage.insertBefore(viewerEl, $('.stage__label', stage));
     const cover = where === 'cover';
     viewerEl.toggleAttribute('camera-controls', !cover);
-    viewerEl.toggleAttribute('auto-rotate', cover && !reducedMotion.matches);
+    viewerEl.toggleAttribute('auto-rotate', (cover ? CONFIG.spin.cover : CONFIG.spin.demo) && !reducedMotion.matches);
     viewerEl.style.pointerEvents = cover ? 'none' : '';
     viewerEl.setAttribute('interaction-prompt', cover ? 'none' : 'auto');
     if (!cover) { viewerEl.cameraOrbit = '210deg 52deg auto'; viewerEl.jumpCameraToGoal && viewerEl.jumpCameraToGoal(); }

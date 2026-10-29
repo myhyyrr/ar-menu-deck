@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ece1">
+<meta name="description" content="Example 3D menu: tap a dish to see it in 3D and place it on your table at real size.">
+<title>Example 3D menu</title>
+<style>
+/* ==========================================================================
+   Example customer-facing menu (what a diner sees after scanning the table QR).
+   Edit MENU below. Dishes, prices and allergens are ILLUSTRATIVE, not a real venue.
+   Only external script: <model-viewer> 4.4.0, loaded when a 3D dish is opened.
+   ========================================================================== */
+:root {
+  --bg: #f4ece1; --card: #fbf7f1; --sunken: #eadfcf; --ink: #16120f; --muted: #4b4137; --subtle: #685b4e;
+  --accent: #e8a33d; --accent-ink: #8a4e00; --sage: #55633f; --chili: #a23b17;
+  --line: rgba(22,18,15,.14); --line-strong: rgba(22,18,15,.3);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16120f; --card: #211b16; --sunken: #0e0b09; --ink: #f4ece1; --muted: #cdbfad; --subtle: #ac9d8c;
+    --accent-ink: #f0b65a; --sage: #9fac90; --chili: #f08a5d; --line: rgba(244,236,225,.14); --line-strong: rgba(244,236,225,.28);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 64px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 var(--sans); }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+.banner { background: var(--ink); color: var(--bg); font-size: .8rem; text-align: center; padding: 6px 16px; }
+header.venue { padding: 28px 0 8px; }
+.venue h1 { font: 600 clamp(1.8rem, 7vw, 2.4rem)/1.1 var(--serif); margin: 0 0 6px; letter-spacing: -.01em; }
+.venue p { margin: 0; color: var(--muted); }
+.tip { margin: 16px 0 4px; display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); font-size: .92rem; color: var(--muted); }
+.tip svg { flex: none; width: 34px; height: 34px; color: var(--accent-ink); }
+.tip strong { color: var(--ink); }
+
+nav.cats { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+nav.cats ul { list-style: none; margin: 0 auto; padding: 10px 16px; max-width: 640px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+nav.cats ul::-webkit-scrollbar { display: none; }
+nav.cats a { display: block; white-space: nowrap; text-decoration: none; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line-strong); font-size: .92rem; min-height: 40px; }
+nav.cats a[aria-current="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+section.cat { padding: 20px 0 4px; }
+section.cat h2 { font: 600 1.35rem/1.2 var(--serif); margin: 0 0 10px; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.item { display: grid; grid-template-columns: 1fr 96px; gap: 12px; padding: 14px; border-radius: 16px; background: var(--card);
+  border: 1px solid var(--line); }
+.item h3 { margin: 0; font-size: 1.02rem; font-weight: 650; }
+.item .desc { margin: 4px 0 6px; color: var(--muted); font-size: .92rem; }
+.item .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .78rem; color: var(--subtle); }
+.tag { border: 1px solid var(--line-strong); border-radius: 6px; padding: 1px 6px; font-weight: 600; letter-spacing: .02em; }
+.tag.veg { color: var(--sage); border-color: currentColor; }
+.spice { color: var(--chili); letter-spacing: -1px; }
+.price { font-weight: 650; margin-top: 8px; }
+.thumb { position: relative; width: 96px; height: 96px; border-radius: 14px; overflow: hidden; background: var(--sunken);
+  display: grid; place-items: center; border: 0; padding: 0; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb .ph { width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center; font: 600 1.3rem/1 var(--serif); color: var(--subtle);
+  background: radial-gradient(circle, var(--card) 0 52%, var(--line-strong) 53% 55%, var(--card) 56% 100%); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
+.featured { margin: 14px 0 0; display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: 18px;
+  background: var(--ink); color: var(--bg); }
+.featured img { width: 112px; height: 112px; object-fit: cover; border-radius: 14px; background: #efe5d6; }
+.featured p { margin: 0; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; opacity: .75; }
+.featured h2 { margin: 2px 0 6px; font: 600 1.2rem/1.2 var(--serif); }
+.featured .open3d { margin-top: 4px; }
+button.thumb { cursor: pointer; }
+.badge3d { position: absolute; left: 6px; bottom: 6px; background: var(--ink); color: var(--bg); font-size: .68rem; font-weight: 700;
+  padding: 3px 7px; border-radius: 999px; letter-spacing: .04em; }
+.open3d { margin-top: 10px; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--accent); color: #1b1309; font-weight: 650; padding: 10px 16px; min-height: 44px; }
+.open3d svg { width: 20px; height: 20px; }
+
+.key { margin: 24px 0 8px; font-size: .82rem; color: var(--subtle); display: flex; flex-wrap: wrap; gap: 10px 16px; }
+footer { padding: 16px 0 48px; font-size: .82rem; color: var(--subtle); }
+footer p { margin: 6px 0; }
+
+/* Dish sheet */
+dialog.sheet { border: 0; padding: 0; margin: auto auto 0; width: 100%; max-width: 640px; max-height: 94vh; max-height: 94dvh;
+  border-radius: 22px 22px 0 0; background: var(--card); color: var(--ink); overflow: auto; }
+dialog.sheet::backdrop { background: rgba(14,11,9,.55); }
+@media (min-width: 700px) { dialog.sheet { margin: auto; border-radius: 22px; } }
+.sheet__stage { position: relative; aspect-ratio: 1 / 1; max-height: 52vh; width: 100%; background: radial-gradient(circle at 50% 45%, #fffaf2, #e6d9c6); }
+.sheet__stage img, .sheet__stage model-viewer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sheet__stage model-viewer { --poster-color: transparent; background: transparent; }
+.sheet__close { position: absolute; top: 10px; right: 10px; z-index: 2; width: 44px; height: 44px; border-radius: 50%; border: 0;
+  background: rgba(22,18,15,.7); color: #f4ece1; font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.sheet__hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; font-size: .78rem;
+  background: rgba(22,18,15,.7); color: #f4ece1; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.sheet__body { padding: 16px 16px max(20px, env(safe-area-inset-bottom)); }
+.sheet__body h2 { font: 600 1.5rem/1.15 var(--serif); margin: 0 0 4px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 14px 0; }
+.fact { background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: .88rem; }
+.fact b { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--subtle); margin-bottom: 2px; }
+.arbtn { width: 100%; justify-content: center; font-size: 1.02rem; min-height: 52px; }
+.note { margin: 10px 0 0; font-size: .86rem; color: var(--muted); }
+.note .btn2 { display: inline-flex; margin-top: 8px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
+  text-decoration: none; font-weight: 600; min-height: 44px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<div class="banner" role="note">Example menu for demonstration. Dishes, prices and allergens are illustrative.</div>
+
+<div class="wrap">
+  <header class="venue">
+    <h1 id="venueName">Your Venue</h1>
+    <p id="venueLine">Adelaide · Dine-in menu</p>
+    <div class="tip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="16" rx="8.5" ry="3.5"/><path d="M5.5 15c.6-3.6 3.2-5.8 6.5-5.8s5.9 2.2 6.5 5.8"/><path d="M12 3v3M8.5 4.5l1 2M15.5 4.5l-1 2"/></svg>
+      <span><strong>Dishes marked 3D</strong> can be turned around and placed on your table at real size, so you can see the portion before you order.</span>
+    </div>
+    <div class="featured" id="featured" hidden></div>
+  </header>
+</div>
+
+<nav class="cats" aria-label="Menu sections"><ul id="catNav"></ul></nav>
+
+<main class="wrap" id="menu"></main>
+
+<div class="wrap">
+  <p class="key" id="key"><span><span class="tag veg">V</span> vegetarian</span><span><span class="tag veg">VG</span> vegan</span><span><span class="tag">GF</span> gluten free</span><span><span class="spice">🌶</span> spice level</span></p>
+  <footer>
+    <p><strong>Allergies:</strong> please tell our staff before ordering. Allergen notes on this page are a guide only.</p>
+    <p>3D dishes are captured from the real dish. Portions are shown at real size; garnish and plating can vary a little.</p>
+    <p><a href="index.html" id="deckLink">About this 3D menu</a></p>
+  </footer>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle">
+  <div class="sheet__stage" id="sheetStage">
+    <img id="sheetPoster" alt="">
+    <button class="sheet__close" type="button" id="sheetClose" aria-label="Close">×</button>
+    <span class="sheet__hint" id="sheetHint" hidden>Drag to turn · pinch to zoom</span>
+  </div>
+  <div class="sheet__body">
+    <h2 id="sheetTitle"></h2>
+    <p class="desc" id="sheetDesc" style="margin:0;color:var(--muted)"></p>
+    <div class="facts" id="sheetFacts"></div>
+    <button class="open3d arbtn" type="button" id="arBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="16" rx="8.5" ry="3.5"/><path d="M5.5 15c.6-3.6 3.2-5.8 6.5-5.8s5.9 2.2 6.5 5.8"/></svg>
+      See it on your table</button>
+    <p class="note" id="arNote" role="status"></p>
+  </div>
+</dialog>
+
+<script>
+/* ==========================================================================
+   MENU — edit dishes here. Only dishes with a `model` get the 3D button.
+   Prices are A$ incl. GST (as a diner sees them). Everything here is an example.
+   ========================================================================== */
+const MENU = {
+  venue: 'Your Venue',               // replaced by ?venue= when present
+  line: 'Adelaide · Dine-in menu',
+  modelViewer: {
+    src: 'https://cdn.jsdelivr.net/npm/@google/model-viewer@4.4.0/dist/model-viewer.min.js',
+    integrity: 'sha384-wjsPzEO+lXOf7d9csIDfAQpPt2OKuUU3m0K9qsdKIuzX4N8czSF6hdh23eAbZa3p'
+  },
+  sections: [
+    { name: 'Starters', items: [
+      { name: 'Pork and chive dumplings (6)', desc: 'Pan-fried, black vinegar and chilli oil', price: 16, spice: 1, allergens: 'Gluten, soy, sesame' },
+      { name: 'Charred corn ribs', desc: 'Miso butter, lime, togarashi', price: 12, tags: ['V', 'GF'], allergens: 'Dairy, soy' },
+      { name: 'Crispy salt and pepper tofu', desc: 'Spring onion, fried garlic, sweet chilli', price: 14, tags: ['VG'], spice: 1, allergens: 'Soy' }
+    ] },
+    { name: 'Mains', items: [
+      { id: 'noodle-soup', name: 'Dumpling noodle soup', desc: 'Dumplings, tofu, cabbage and herbs in a spiced broth', price: 24, spice: 2,
+        allergens: 'Gluten, soy, egg, sesame', portion: 'Bowl about 22 cm across (estimated) · serves 1', ingredients: 'Wheat noodles, pork dumplings, fried tofu, red cabbage, coriander, chilli broth',
+        model: { glb: 'assets/dish.glb', androidGlb: 'assets/dish-sv.glb', usdz: 'assets/dish.usdz', poster: 'assets/dish-poster.webp' } },
+      { name: 'Mushroom risotto', desc: 'Mixed mushrooms, parmesan, thyme', price: 26, tags: ['V', 'GF'], allergens: 'Dairy' },
+      { name: 'Fish of the day', desc: 'Ask your server for today’s catch', price: 34, tags: ['GF'], allergens: 'Fish' }
+    ] },
+    { name: 'Desserts', items: [
+      { name: 'Black sesame panna cotta', desc: 'Poached pear, honey tuile', price: 13, allergens: 'Dairy, sesame, gluten' },
+      { name: 'Mango sticky rice', desc: 'Coconut cream, toasted mung bean', price: 14, tags: ['VG', 'GF'], allergens: 'None listed' }
+    ] },
+    { name: 'Drinks', items: [
+      { name: 'House iced lemon tea', desc: 'Brewed in-house, lightly sweetened', price: 6, tags: ['VG', 'GF'] },
+      { name: 'Sparkling yuzu lemonade', desc: '330 ml', price: 7, tags: ['VG', 'GF'] }
+    ] }
+  ]
+};
+
+(function () {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const params = new URLSearchParams(location.search);
+  const venue = (params.get('venue') || '').replace(/[^\p{L}\p{N}\s&'’.,()-]/gu, '').trim().slice(0, 40);
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- Render the menu ---------- */
+  $('#venueName').textContent = venue || MENU.venue;
+  $('#venueLine').textContent = MENU.line;
+  document.title = (venue || MENU.venue) + ' · Menu';
+  if (venue) $('#deckLink').href = 'index.html?venue=' + encodeURIComponent(venue);
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const byId = {};
+  $('#catNav').innerHTML = MENU.sections.map((s, i) => `<li><a href="#${slug(s.name)}"${i === 0 ? ' aria-current="true"' : ''}>${esc(s.name)}</a></li>`).join('');
+  $('#menu').innerHTML = MENU.sections.map(s => `
+    <section class="cat" id="${slug(s.name)}" aria-labelledby="h-${slug(s.name)}">
+      <h2 id="h-${slug(s.name)}">${esc(s.name)}</h2>
+      <ul class="items">${s.items.map(it => {
+        const id = it.id || slug(it.name); byId[id] = it;
+        const tags = (it.tags || []).map(t => `<span class="tag${t === 'GF' ? '' : ' veg'}">${t}</span>`).join('');
+        const spice = it.spice ? `<span class="spice" aria-label="Spice level ${it.spice} of 3">${'🌶'.repeat(it.spice)}</span>` : '';
+        const thumb = it.model
+          ? `<button class="thumb" type="button" data-open="${id}" aria-label="See ${esc(it.name)} in 3D"><img src="${esc(it.model.poster)}" alt="" loading="lazy" width="96" height="96"><span class="badge3d">3D</span></button>`
+          : `<span class="thumb" aria-hidden="true"><span class="ph">${esc(it.name[0])}</span></span>`;
+        const btn = it.model ? `<br><button class="open3d" type="button" data-open="${id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>See in 3D</button>` : '';
+        return `<li class="item" id="dish-${id}"><div><h3>${esc(it.name)}</h3><p class="desc">${esc(it.desc)}</p>
+          <div class="meta">${tags}${spice}</div><div class="price">$${it.price}</div>${btn}</div>${thumb}</li>`;
+      }).join('')}</ul>
+    </section>`).join('');
+
+  // Feature the first 3D dish at the top, so diners find it without scrolling
+  const hero = Object.entries(byId).find(([, it]) => it.model);
+  if (hero) {
+    const [id, it] = hero, f = $('#featured');
+    f.innerHTML = `<img src="${esc(it.model.poster)}" alt="" width="112" height="112"><div><p>Try it in 3D</p><h2>${esc(it.name)}</h2>
+      <button class="open3d" type="button" data-open="${id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>See in 3D</button></div>`;
+    f.hidden = false;
+  }
+
+  // Highlight the section in view
+  const links = [...document.querySelectorAll('#catNav a')];
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) links.forEach(a => a.setAttribute('aria-current', String(a.hash === '#' + e.target.id))); });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    document.querySelectorAll('section.cat').forEach(s => io.observe(s));
+  }
+
+  /* ---------- Platform + AR (same routing as the deck) ---------- */
+  const ua = navigator.userAgent;
+  const IS_IOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const IS_ANDROID = /android/i.test(ua) && !/firefox/i.test(ua);
+  const QUICKLOOK = IS_IOS && (/CriOS\/|EdgiOS\/|FxiOS\/|GSA\/|DuckDuckGo\//.test(ua) || (() => { const a = document.createElement('a'); return !!(a.relList && a.relList.supports && a.relList.supports('ar')); })());
+  let webxr = false;
+  const webxrReady = IS_ANDROID && navigator.xr && navigator.xr.isSessionSupported
+    ? navigator.xr.isSessionSupported('immersive-ar').then(ok => (webxr = !!ok)).catch(() => false) : Promise.resolve(false);
+  const LAUNCH_KEY = 'menu-ar-launch';
+
+  let mvLoad = null, current = null, viewer = null;
+  function loadModelViewer() {
+    if (mvLoad) return mvLoad;
+    mvLoad = new Promise((res, rej) => {
+      if (customElements.get('model-viewer')) return res();
+      const s = document.createElement('script');
+      s.type = 'module'; s.src = MENU.modelViewer.src; s.crossOrigin = 'anonymous'; s.integrity = MENU.modelViewer.integrity;
+      s.onload = () => customElements.whenDefined('model-viewer').then(res);
+      s.onerror = () => { mvLoad = null; rej(new Error('cdn')); };
+      document.head.appendChild(s);
+    });
+    return mvLoad;
+  }
+
+  const sheet = $('#sheet'), note = (html) => { $('#arNote').innerHTML = html; };
+  function openDish(id, { fromReturn = false } = {}) {
+    const it = byId[id]; if (!it || !it.model) return;
+    current = it;
+    $('#sheetTitle').textContent = it.name;
+    $('#sheetDesc').textContent = it.desc;
+    const poster = $('#sheetPoster'); poster.src = it.model.poster; poster.alt = it.name; poster.hidden = false;
+    const facts = [['Portion', it.portion], ['Price', '$' + it.price], ['Ingredients', it.ingredients], ['Contains', it.allergens]].filter(f => f[1]);
+    $('#sheetFacts').innerHTML = facts.map(([k, v]) => `<div class="fact"><b>${k}</b>${esc(v)}</div>`).join('');
+    $('#arBtn').hidden = !(IS_IOS || IS_ANDROID);
+    if (!fromReturn) note(IS_IOS || IS_ANDROID ? '' : 'Open this menu on your phone to place the dish on your table.');
+    if (typeof sheet.showModal === 'function') sheet.showModal(); else sheet.setAttribute('open', '');
+    history.replaceState(null, '', '#dish-' + id);
+    loadModelViewer().then(() => {
+      if (!viewer) {
+        viewer = document.createElement('model-viewer');
+        const hidden = document.createElement('span'); hidden.slot = 'ar-button'; hidden.hidden = true; viewer.appendChild(hidden);
+        Object.entries({ 'camera-controls': '', 'touch-action': 'pan-y', 'shadow-intensity': '1', 'environment-image': 'neutral',
+          'camera-orbit': '210deg 52deg auto', 'max-camera-orbit': 'auto 62deg auto', 'interaction-prompt': 'none',
+          'rotation-per-second': '18deg', 'auto-rotate-delay': '2500', ar: '', 'ar-modes': 'quick-look', 'ar-scale': 'fixed' })
+          .forEach(([k, v]) => viewer.setAttribute(k, v));
+        viewer.addEventListener('load', () => { poster.hidden = true; $('#sheetHint').hidden = false; });
+        $('#sheetStage').insertBefore(viewer, $('#sheetClose'));
+      }
+      viewer.toggleAttribute('auto-rotate', !reduced.matches);
+      viewer.setAttribute('alt', it.name + ' in 3D');
+      viewer.setAttribute('ios-src', it.model.usdz);
+      if (viewer.getAttribute('src') !== it.model.glb) viewer.setAttribute('src', it.model.glb);
+      else { poster.hidden = true; $('#sheetHint').hidden = false; }
+    }).catch(() => { $('#sheetHint').hidden = true; });
+  }
+  function closeSheet() {
+    if (sheet.open) { if (typeof sheet.close === 'function') sheet.close(); else sheet.removeAttribute('open'); }
+  }
+  sheet.addEventListener('close', () => { history.replaceState(null, '', location.pathname + location.search); });
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
+  $('#sheetClose').addEventListener('click', closeSheet);
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openDish(b.dataset.open); });
+
+  function launchAR() {
+    const it = current; if (!it) return;
+    if (location.protocol !== 'https:') { note('<strong>AR needs a secure https:// address.</strong> Open the published menu on your phone.'); return; }
+    if (QUICKLOOK) {
+      if (viewer && viewer.canActivateAR) { viewer.activateAR(); return; }
+      const a = document.createElement('a'); a.rel = 'ar';
+      a.href = new URL(it.model.usdz, location.href).href + '#allowsContentScaling=0';
+      a.appendChild(document.createElement('img')); document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000);
+      return;
+    }
+    if (IS_ANDROID) {
+      const file = new URL(it.model.androidGlb || it.model.glb, location.href).href;
+      const back = new URL(location.href); back.searchParams.set('ar', 'unavailable'); back.hash = 'dish-' + (it.id || slug(it.name));
+      const q = new URLSearchParams({ file, mode: 'ar_preferred', resizable: 'false', title: it.name });
+      try { sessionStorage.setItem(LAUNCH_KEY, JSON.stringify({ t: Date.now(), id: it.id || slug(it.name) })); } catch (e) {}
+      location.href = `intent://arvr.google.com/scene-viewer/1.0?${q}#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(back.href)};end;`;
+      return;
+    }
+    note(IS_IOS ? '<strong>Open this menu in Safari to use AR.</strong>' : 'Open this menu on your phone to place the dish on your table.');
+  }
+  $('#arBtn').addEventListener('click', launchAR);
+
+  // Back from Scene Viewer (closed, crashed or not installed): reopen the dish and offer another way in.
+  function cameBack() {
+    let rec = null;
+    try { rec = JSON.parse(sessionStorage.getItem(LAUNCH_KEY) || 'null'); sessionStorage.removeItem(LAUNCH_KEY); } catch (e) {}
+    const unavailable = params.get('ar') === 'unavailable';
+    if (!rec && !unavailable) return;
+    if (rec && Date.now() - rec.t > 10 * 60 * 1000 && !unavailable) return;
+    const id = (rec && rec.id) || (location.hash.replace('#dish-', ''));
+    if (!sheet.open && byId[id]) openDish(id, { fromReturn: true });
+    webxrReady.then(() => {
+      const tips = 'If it closed with “Google keeps stopping”, update the <strong>Google</strong> app and <strong>Google Play Services for AR</strong> in the Play Store.';
+      const alt = new URL('ar.html', location.href); alt.searchParams.set('alt', '1'); alt.searchParams.set('from', 'menu'); if (venue) alt.searchParams.set('venue', venue);
+      note(unavailable && !webxr
+        ? '<strong>AR isn’t available on this phone.</strong> You can still turn the dish around in 3D above.'
+        : `<strong>Didn’t open?</strong> ${webxr ? `<a class="btn2" href="${alt.href}">Try in-browser AR</a><br>` : ''}${tips}`);
+    });
+    if (unavailable) { const u = new URL(location.href); u.searchParams.delete('ar'); history.replaceState(null, '', u.href); }
+  }
+  cameBack();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cameBack(); });
+
+  // Deep link: menu.html#dish-noodle-soup opens that dish
+  const m = location.hash.match(/^#dish-(.+)$/);
+  if (m && byId[m[1]] && byId[m[1]].model && !sheet.open) openDish(m[1]);
+})();
+</script>
+</body>
+</html>
